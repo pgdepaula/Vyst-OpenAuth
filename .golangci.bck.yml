@@ -1,0 +1,30 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gosec
+    - gocyclo
+    - gofmt
+    - misspell
+    - unconvert
+    - unparam
+    - prealloc
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  gosec:
+    excludes:
+      - G104 # Duplicate of errcheck
+
+issues:
+  exclude-use-default: false
