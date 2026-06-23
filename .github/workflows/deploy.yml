@@ -70,7 +70,7 @@ jobs:
     if: inputs.deploy_backend || inputs.run_migrations
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: ./.github/actions/setup-go
@@ -89,7 +89,7 @@ jobs:
           tar -C deploy/backend -czf dist/deploy-backend-linux-amd64.tar.gz .
 
       - name: Upload backend deployment bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deploy-backend-linux-amd64
           path: dist/deploy-backend-linux-amd64.tar.gz
@@ -103,10 +103,10 @@ jobs:
     if: inputs.deploy_frontend
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: npm
@@ -133,7 +133,7 @@ jobs:
           tar -C "$bundle_dir" -czf dist/deploy-frontend.tar.gz .
 
       - name: Upload frontend deployment bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deploy-frontend
           path: dist/deploy-frontend.tar.gz
@@ -152,10 +152,10 @@ jobs:
       url: ${{ vars.AUTH_BASE_URL }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download backend deployment bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: deploy-backend-linux-amd64
           path: dist
@@ -269,10 +269,10 @@ jobs:
       url: ${{ vars.FRONTEND_BASE_URL }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download frontend deployment bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: deploy-frontend
           path: dist
