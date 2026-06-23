@@ -117,14 +117,14 @@ jobs:
         uses: ./.github/actions/setup-go
 
       - name: Run golangci-lint (root)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           working-directory: .
           args: --timeout=5m
 
       - name: Run golangci-lint (demo-app)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           working-directory: examples/demo-app
