@@ -76,6 +76,7 @@ jobs:
             exit 0
           fi
 
+          # shellcheck disable=SC2086
           files="$(gofmt -l $changed_go_files)"
           if [ -n "$files" ]; then
             echo "The following changed Go files are not gofmt-formatted:"
@@ -118,14 +119,14 @@ jobs:
       - name: Run golangci-lint (root)
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.5
+          version: v2.12.2
           working-directory: .
           args: --timeout=5m
 
       - name: Run golangci-lint (demo-app)
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.5
+          version: v2.12.2
           working-directory: examples/demo-app
           args: --timeout=5m
 
