@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS users_cpf_idx;
+ALTER TABLE users DROP COLUMN IF EXISTS cpf;

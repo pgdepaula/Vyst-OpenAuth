@@ -1,0 +1,197 @@
+syntax = "proto3";
+
+package identity;
+
+option go_package = "github.com/vyst/identity/api/proto";
+
+// ============================================================================
+// Vyst Identity Service - gRPC API
+// Service-to-Service (S2S) Authorization Operations
+//
+// NOTE: Authentication (Login, Register, Logout) is handled via REST API.
+// This gRPC API is designed for high-performance internal service communication.
+// ============================================================================
+
+// IdentityService provides authorization and identity validation operations.
+// All methods are optimized for high-performance, real-time S2S communication.
+service IdentityService {
+  // ValidateToken validates a JWT access token.
+  // Used by downstream services to verify authentication.
+  // Optimized for stateless RSA signature verification.
+  //
+  // Error codes:
+  // - UNAUTHENTICATED: Token is invalid or expired
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // StreamValidateSession provides real-time session validation.
+  // Used for implementing security kill switches and session monitoring.
+  // The server will push updates when session status changes.
+  rpc StreamValidateSession(stream ValidateSessionRequest) returns (stream ValidateSessionResponse);
+
+  // GetUserRoles returns the roles assigned to a user.
+  // Used by backend services for authorization decisions.
+  //
+  // Error codes:
+  // - NOT_FOUND: User or tenant not found
+  // - UNAUTHENTICATED: Invalid token in metadata
+  rpc GetUserRoles(GetUserRolesRequest) returns (GetUserRolesResponse);
+
+  // GetUserPermissions returns the full permission set for a user.
+  // Aggregates permissions from all user roles.
+  //
+  // Error codes:
+  // - NOT_FOUND: User not found
+  // - UNAUTHENTICATED: Invalid token in metadata
+  rpc GetUserPermissions(GetUserPermissionsRequest) returns (GetUserPermissionsResponse);
+
+  // RevokeUserSessions terminates all active sessions for a user.
+  // Triggers the Kill Switch mechanism across all connected services.
+  //
+  // Error codes:
+  // - NOT_FOUND: User not found
+  // - PERMISSION_DENIED: Caller lacks admin privileges
+  // RevokeUserSessions terminates all active sessions for a user.
+  // Triggers the Kill Switch mechanism across all connected services.
+  //
+  // Error codes:
+  // - NOT_FOUND: User not found
+  // - PERMISSION_DENIED: Caller lacks admin privileges
+  rpc RevokeUserSessions(RevokeUserSessionsRequest) returns (RevokeUserSessionsResponse);
+
+  // ValidateCompanyAccess checks if a user (via token) has access to a specific company.
+  // Returns the user's role in the company.
+  rpc ValidateCompanyAccess(ValidateCompanyAccessRequest) returns (ValidateCompanyAccessResponse);
+
+  // GetCompanyRoles returns all company memberships for a user.
+  rpc GetCompanyRoles(GetCompanyRolesRequest) returns (GetCompanyRolesResponse);
+}
+
+// ============================================================================
+// Token Validation Messages
+// ============================================================================
+
+// ValidateTokenRequest contains the token to validate.
+message ValidateTokenRequest {
+  // JWT access token to validate
+  string token = 1;
+}
+
+// ValidateTokenResponse contains the validation result and user info.
+message ValidateTokenResponse {
+  // Whether the token is valid
+  bool valid = 1;
+  // User ID from the token claims
+  string user_id = 2;
+  // Tenant ID from the token claims
+  string tenant_id = 3;
+  // User's roles from the token claims
+  repeated string roles = 4;
+}
+
+// ============================================================================
+// Session Streaming Messages (Kill Switch)
+// ============================================================================
+
+// ValidateSessionRequest is used for streaming session validation.
+message ValidateSessionRequest {
+  // Session ID or token to monitor
+  string session_id = 1;
+}
+
+// ValidateSessionResponse contains the session status.
+message ValidateSessionResponse {
+  // Whether the session is still active
+  bool active = 1;
+  // Reason for session invalidation (if not active)
+  string reason = 2;
+}
+
+// ============================================================================
+// RBAC Query Messages
+// ============================================================================
+
+// GetUserRolesRequest specifies the user to query roles for.
+message GetUserRolesRequest {
+  // User ID to get roles for
+  string user_id = 1;
+  // Tenant ID for tenant-scoped roles
+  string tenant_id = 2;
+}
+
+// GetUserRolesResponse contains the user's assigned roles.
+message GetUserRolesResponse {
+  // List of role names assigned to the user
+  repeated string roles = 1;
+}
+
+// GetUserPermissionsRequest specifies the user to query permissions for.
+message GetUserPermissionsRequest {
+  // User ID to get permissions for
+  string user_id = 1;
+  // Tenant ID for tenant-scoped permissions
+  string tenant_id = 2;
+}
+
+// Permission represents a single permission entry.
+message Permission {
+  // Resource type (e.g., "invoice", "user", "report")
+  string resource = 1;
+  // Action allowed (e.g., "read", "write", "delete")
+  string action = 2;
+  // Optional: specific resource ID or "*" for all
+  string resource_id = 3;
+}
+
+// GetUserPermissionsResponse contains the user's full permission set.
+message GetUserPermissionsResponse {
+  // List of permissions the user has
+  repeated Permission permissions = 1;
+}
+
+// ============================================================================
+// Session Management Messages (Kill Switch)
+// ============================================================================
+
+// RevokeUserSessionsRequest specifies the user whose sessions to revoke.
+message RevokeUserSessionsRequest {
+  // User ID whose sessions should be revoked
+  string user_id = 1;
+  // Reason for revocation (logged for audit)
+  string reason = 2;
+}
+
+// RevokeUserSessionsResponse indicates the result of session revocation.
+message RevokeUserSessionsResponse {
+  // Number of sessions that were revoked
+  int32 revoked_count = 1;
+  // Whether the operation was successful
+  bool success = 2;
+}
+
+// ============================================================================
+// Company Context Messages
+// ============================================================================
+
+message ValidateCompanyAccessRequest {
+  string token = 1;
+  string company_id = 2;
+}
+
+message ValidateCompanyAccessResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string role = 3; // Role in the company (admin, member, viewer)
+}
+
+message GetCompanyRolesRequest {
+  string user_id = 1;
+}
+
+message CompanyRoleEntry {
+  string company_id = 1;
+  string role = 2;
+}
+
+message GetCompanyRolesResponse {
+  repeated CompanyRoleEntry roles = 1;
+}

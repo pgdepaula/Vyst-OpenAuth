@@ -1,0 +1,315 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target GitHub Environment.
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+      deploy_backend:
+        description: Deploy the Go API binary.
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: Deploy the Angular admin UI.
+        required: true
+        type: boolean
+        default: false
+      run_migrations:
+        description: Run database migrations before swapping the API binary.
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate-request:
+    name: Validate deployment request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate deployment context
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Target environment: ${TARGET_ENVIRONMENT}"
+          echo "Source ref: ${REF_NAME}"
+
+          if [ "${{ inputs.deploy_backend }}" != "true" ] && [ "${{ inputs.deploy_frontend }}" != "true" ]; then
+            echo "At least one deploy target must be enabled."
+            exit 1
+          fi
+
+          if [ "$TARGET_ENVIRONMENT" = "production" ]; then
+            if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+              echo "Production deployments must be run from a semantic version tag."
+              exit 1
+            fi
+          fi
+
+  build-backend:
+    name: Build backend deployment bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: validate-request
+    if: inputs.deploy_backend || inputs.run_migrations
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run backend unit tests
+        run: go test -short ./internal/... ./pkg/... ./cmd/...
+
+      - name: Build backend bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/backend/migrations dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o deploy/backend/identity-api ./cmd/identity-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o deploy/backend/migrate ./cmd/migrate
+          cp migrations/*.sql deploy/backend/migrations/
+          tar -C deploy/backend -czf dist/deploy-backend-linux-amd64.tar.gz .
+
+      - name: Upload backend deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-backend-linux-amd64
+          path: dist/deploy-backend-linux-amd64.tar.gz
+          retention-days: 1
+
+  build-frontend:
+    name: Build frontend deployment bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate-request
+    if: inputs.deploy_frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/vyst-ui/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web/vyst-ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web/vyst-ui
+        run: npm run build
+
+      - name: Package frontend bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_dir="web/vyst-ui/dist/vyst-ui/browser"
+          if [ ! -d "$bundle_dir" ]; then
+            echo "Expected Angular browser bundle was not found at ${bundle_dir}."
+            exit 1
+          fi
+          mkdir -p dist
+          tar -C "$bundle_dir" -czf dist/deploy-frontend.tar.gz .
+
+      - name: Upload frontend deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-frontend
+          path: dist/deploy-frontend.tar.gz
+          retention-days: 1
+
+  deploy-backend:
+    name: Deploy backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - validate-request
+      - build-backend
+    if: inputs.deploy_backend
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.AUTH_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download backend deployment bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-backend-linux-amd64
+          path: dist
+
+      - name: Set up SSH
+        uses: ./.github/actions/setup-ssh
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT || '22' }}
+          private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Upload backend bundle
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+          BACKEND_DEPLOY_PATH: ${{ vars.BACKEND_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BACKEND_DEPLOY_PATH" ]; then
+            echo "BACKEND_DEPLOY_PATH environment variable is required."
+            exit 1
+          fi
+          remote_path="$(printf '%q' "$BACKEND_DEPLOY_PATH")"
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$SERVER_USERNAME@$SERVER_HOST" "mkdir -p ${remote_path}"
+          scp -P "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes dist/deploy-backend-linux-amd64.tar.gz "$SERVER_USERNAME@$SERVER_HOST:$BACKEND_DEPLOY_PATH/release.tar.gz"
+
+      - name: Activate backend release
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+          BACKEND_DEPLOY_PATH: ${{ vars.BACKEND_DEPLOY_PATH }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RUN_MIGRATIONS: ${{ inputs.run_migrations }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BACKEND_DEPLOY_PATH" ]; then
+            echo "BACKEND_DEPLOY_PATH environment variable is required."
+            exit 1
+          fi
+          if [ "$RUN_MIGRATIONS" = "true" ] && [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is required when migrations are enabled."
+            exit 1
+          fi
+
+          remote_env="$(printf 'BACKEND_DEPLOY_PATH=%q RUN_MIGRATIONS=%q DATABASE_URL=%q' "$BACKEND_DEPLOY_PATH" "$RUN_MIGRATIONS" "$DATABASE_URL")"
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$SERVER_USERNAME@$SERVER_HOST" "${remote_env} bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$BACKEND_DEPLOY_PATH"
+          rm -rf release
+          mkdir -p release
+          tar -xzf release.tar.gz -C release
+          chmod +x release/identity-api release/migrate
+
+          if [ "$RUN_MIGRATIONS" = "true" ]; then
+            echo "Running database migrations..."
+            release/migrate -dir release/migrations -dsn "$DATABASE_URL"
+          fi
+
+          if [ -f identity-api ]; then
+            cp identity-api identity-api.previous
+          fi
+
+          mv release/identity-api identity-api
+          mv release/migrate migrate
+          rm -rf migrations
+          mv release/migrations migrations
+
+          if pgrep -f "./identity-api" >/dev/null 2>&1; then
+            echo "Stopping existing API process..."
+            pkill -f "./identity-api"
+            sleep 2
+          fi
+
+          echo "Starting API process..."
+          nohup ./identity-api > app.log 2>&1 &
+          echo $! > api.pid
+          rm -rf release release.tar.gz
+          REMOTE
+
+      - name: Run backend smoke test
+        shell: bash
+        env:
+          AUTH_BASE_URL: ${{ vars.AUTH_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AUTH_BASE_URL" ]; then
+            echo "AUTH_BASE_URL environment variable is required for smoke tests."
+            exit 1
+          fi
+
+          echo "Running deployment smoke tests..."
+          for endpoint in health ready; do
+            curl --fail --silent --show-error --retry 5 --retry-delay 2 "${AUTH_BASE_URL}/${endpoint}" >/dev/null
+            echo "${endpoint} endpoint passed."
+          done
+
+  deploy-frontend:
+    name: Deploy frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs:
+      - validate-request
+      - build-frontend
+    if: inputs.deploy_frontend
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.FRONTEND_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download frontend deployment bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-frontend
+          path: dist
+
+      - name: Set up SSH
+        uses: ./.github/actions/setup-ssh
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT || '22' }}
+          private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Upload and activate frontend release
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+          FRONTEND_DEPLOY_PATH: ${{ vars.FRONTEND_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FRONTEND_DEPLOY_PATH" ] || [ "$FRONTEND_DEPLOY_PATH" = "/" ]; then
+            echo "FRONTEND_DEPLOY_PATH must be set to a safe non-root directory."
+            exit 1
+          fi
+
+          remote_path="$(printf '%q' "$FRONTEND_DEPLOY_PATH")"
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$SERVER_USERNAME@$SERVER_HOST" "mkdir -p ${remote_path}"
+          scp -P "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes dist/deploy-frontend.tar.gz "$SERVER_USERNAME@$SERVER_HOST:$FRONTEND_DEPLOY_PATH/frontend.tar.gz"
+
+          remote_env="$(printf 'FRONTEND_DEPLOY_PATH=%q' "$FRONTEND_DEPLOY_PATH")"
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$SERVER_USERNAME@$SERVER_HOST" "${remote_env} bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$FRONTEND_DEPLOY_PATH"
+          rm -rf release
+          mkdir -p release
+          tar -xzf frontend.tar.gz -C release
+          find "$FRONTEND_DEPLOY_PATH" -mindepth 1 -maxdepth 1 ! -name release ! -name frontend.tar.gz -exec rm -rf {} +
+          cp -R release/. "$FRONTEND_DEPLOY_PATH"/
+          rm -rf release frontend.tar.gz
+          REMOTE

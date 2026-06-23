@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="40. Run Unit Tests (-short)" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="DIRECTORY" />
+    <directory value="$PROJECT_DIR$/internal" />
+    <filePath value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <pattern value="^\QTest\E" />
+    <goargs value="-short" />
+    <method v="2" />
+  </configuration>
+</component>

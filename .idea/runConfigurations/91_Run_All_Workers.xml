@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="91. Run All Workers (In Parallel)" type="CompoundRunConfigurationType">
+    <toRun name="10. Run Sentinel Worker" type="GoApplicationRunConfiguration" />
+    <toRun name="11. Run Billing Worker" type="GoApplicationRunConfiguration" />
+    <toRun name="12. Run Outbox Worker" type="GoApplicationRunConfiguration" />
+    <toRun name="13. Run Job Sync Companies" type="GoApplicationRunConfiguration" />
+  </configuration>
+</component>

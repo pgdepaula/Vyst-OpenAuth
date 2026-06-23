@@ -1,0 +1,238 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - main
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.classify.outputs.go }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      docker: ${{ steps.classify.outputs.docker }}
+      docs: ${{ steps.classify.outputs.docs }}
+      workflows: ${{ steps.classify.outputs.workflows }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manual_run=false
+          case "${{ github.event_name }}" in
+            pull_request)
+              base="${{ github.event.pull_request.base.sha }}"
+              head="${{ github.event.pull_request.head.sha }}"
+              ;;
+            merge_group)
+              base="${{ github.event.merge_group.base_sha }}"
+              head="${{ github.event.merge_group.head_sha }}"
+              ;;
+            push)
+              base="${{ github.event.before }}"
+              head="${{ github.sha }}"
+              ;;
+            workflow_dispatch)
+              base=""
+              head="${{ github.sha }}"
+              manual_run=true
+              ;;
+            *)
+              base=""
+              head="${{ github.sha }}"
+              manual_run=true
+              ;;
+          esac
+
+          if [ "$manual_run" = "true" ]; then
+            git ls-files > changed-files.txt
+          elif [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            git ls-files > changed-files.txt
+          else
+            git diff --name-only "$base" "$head" > changed-files.txt
+          fi
+
+          echo "Changed files:"
+          sed 's/^/- /' changed-files.txt
+
+          set_output() {
+            local name="$1"
+            local pattern="$2"
+            if [ "$manual_run" = "true" ] || grep -E "$pattern" changed-files.txt >/dev/null 2>&1; then
+              echo "${name}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name}=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          set_output go '^(cmd|internal|pkg|api|migrations|test|scripts/ci|scripts/build|examples/demo-app)(/|$)|^(go\.mod|go\.sum|Makefile|\.golangci\.yml)$'
+          set_output frontend '^web/vyst-ui/'
+          set_output docker '^(deployments|docker-compose\.yml)(/|$)|^deployments/docker-compose\.monitoring\.yml$'
+          set_output docs '^(Wiki|README\.md|LICENSE|\.github/(CONTRIBUTING|SECURITY|SUPPORT)\.md)(/|$)'
+          set_output workflows '^\.github/(workflows|actions)/'
+
+  workflow-lint:
+    name: Lint GitHub workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: changes
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      needs.changes.outputs.workflows == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Linting GitHub Actions workflows..."
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+  go-validation:
+    name: Go validation
+    needs: changes
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (needs.changes.outputs.go == 'true' || needs.changes.outputs.workflows == 'true')
+    uses: ./.github/workflows/_go-validation.yml
+    with:
+      run-integration: ${{ github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref_name == 'main') }}
+      run-race: ${{ github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref_name == 'main') }}
+      upload-coverage: true
+      check-format: true
+
+  frontend:
+    name: Frontend validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: changes
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflows == 'true')
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/vyst-ui/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web/vyst-ui
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: web/vyst-ui
+        run: npm test -- --watch=false
+
+      - name: Build frontend
+        working-directory: web/vyst-ui
+        run: npm run build
+
+  docker-build:
+    name: Validate Docker image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: changes
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (
+        needs.changes.outputs.docker == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        (github.event_name == 'push' && github.ref_name == 'main' && needs.changes.outputs.go == 'true')
+      )
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - changes
+      - workflow-lint
+      - go-validation
+      - frontend
+      - docker-build
+    if: always()
+    steps:
+      - name: Check required CI results
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=false
+
+          check_result() {
+            local name="$1"
+            local result="$2"
+            case "$result" in
+              success|skipped)
+                echo "${name}: ${result}"
+                ;;
+              *)
+                echo "${name}: ${result}"
+                failed=true
+                ;;
+            esac
+          }
+
+          check_result "Workflow lint" "${{ needs.workflow-lint.result }}"
+          check_result "Go validation" "${{ needs.go-validation.result }}"
+          check_result "Frontend validation" "${{ needs.frontend.result }}"
+          check_result "Docker image build" "${{ needs.docker-build.result }}"
+
+          if [ "$failed" = "true" ]; then
+            echo "One or more required CI jobs failed."
+            exit 1
+          fi
+
+          echo "CI gate passed."

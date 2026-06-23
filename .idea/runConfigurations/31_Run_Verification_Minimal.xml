@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="31. Run Verification (Minimal)" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="PACKAGE" />
+    <package value="github.com/vyst/identity/cmd/verify" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/verify/main.go" />
+    <parameters value="--skip-grpc --skip-graphql" />
+    <envs>
+      <env name="DATABASE_URL" value="postgres://postgres:postgres@localhost:5432/vyst_identity?sslmode=disable" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,244 @@
+# Vyst Identity GraphQL API
+# Enterprise-grade Identity and Access Management
+#
+# This schema defines the GraphQL interface for the Admin Dashboard.
+# Authentication (Login, Register) is handled via REST API endpoints.
+
+"User represents an authenticated user account in the system."
+type User {
+  "Unique user identifier (UUID)"
+  id: ID!
+  "User's email address"
+  email: String!
+  "ID of the tenant this user belongs to"
+  tenant_id: ID!
+  "Account status: active, pending, suspended"
+  status: String!
+  "User's assigned roles"
+  roles: [String!]!
+  "ISO 8601 creation timestamp"
+  created_at: String!
+  "ISO 8601 last update timestamp"
+  updated_at: String!
+}
+
+"Tenant represents an organization or workspace with isolated data."
+type Tenant {
+  "Unique tenant identifier (UUID)"
+  id: ID!
+  "Tenant display name"
+  name: String!
+  "Tenant status: active, suspended"
+  status: String!
+  "Number of users in the tenant"
+  user_count: Int!
+  "ISO 8601 creation timestamp"
+  created_at: String!
+  "ISO 8601 last update timestamp"
+  updated_at: String!
+}
+
+"Permission represents an access control entry."
+type Permission {
+  "Unique permission identifier"
+  id: ID!
+  "Resource type (e.g., invoice, user, report)"
+  resource: String!
+  "Allowed action (e.g., read, write, delete)"
+  action: String!
+  "Permission description"
+  description: String!
+}
+
+"Role represents a named set of permissions."
+type Role {
+  "Unique role identifier"
+  id: ID!
+  "Role name (e.g., admin, viewer, editor)"
+  name: String!
+  "Role description"
+  description: String!
+  "Permissions granted by this role"
+  permissions: [Permission!]!
+}
+
+"UserConnection represents a paginated list of users."
+type UserConnection {
+  "List of users in this page"
+  items: [User!]!
+  "Total count of users matching the filter"
+  count: Int!
+}
+
+"TenantConnection represents a paginated list of tenants."
+type TenantConnection {
+  "List of tenants in this page"
+  items: [Tenant!]!
+  "Total count of tenants matching the filter"
+  count: Int!
+}
+
+"UserFilterInput allows filtering users by various criteria."
+input UserFilterInput {
+  "Filter by tenant ID"
+  tenantId: ID
+  "Filter by role name"
+  role: String
+  "Filter by status (active, pending, suspended)"
+  status: String
+  "Filter users created after this ISO 8601 timestamp"
+  createdAfter: String
+  "Filter users created before this ISO 8601 timestamp"
+  createdBefore: String
+  "Search by email (partial match)"
+  emailSearch: String
+}
+
+"TenantFilterInput allows filtering tenants by various criteria."
+input TenantFilterInput {
+  "Filter by status (active, suspended)"
+  status: String
+  "Search by tenant name (partial match)"
+  nameSearch: String
+  "Filter tenants created after this ISO 8601 timestamp"
+  createdAfter: String
+  "Filter tenants created before this ISO 8601 timestamp"
+  createdBefore: String
+}
+
+"Query operations for reading data. Requires authentication."
+type Query {
+  "Returns the currently authenticated user."
+  me: User!
+
+  "Lists users with optional filtering and pagination. Admin access required."
+  users(filter: UserFilterInput, page: Int, limit: Int): UserConnection!
+
+  "Lists tenants with optional filtering and pagination. Super admin required."
+  tenants(filter: TenantFilterInput, page: Int, limit: Int): TenantConnection!
+
+  "Returns all available permissions in the system."
+  permissions: [Permission!]!
+
+  "Returns all available roles in the system."
+  roles: [Role!]!
+}
+
+"Mutation operations. Auth is via REST API, these are admin operations."
+type Mutation {
+  "Updates a user's roles. Admin access required."
+  updateUserRoles(userId: ID!, roles: [String!]!): User!
+
+  "Deactivates a user account. Admin access required."
+  deactivateUser(userId: ID!, reason: String): User!
+
+  "Reactivates a suspended user account. Admin access required."
+  reactivateUser(userId: ID!): User!
+}
+
+"Subscription operations for real-time admin dashboard updates."
+type Subscription {
+  "Fires when a new user is registered."
+  userRegistered: User!
+
+  "Fires when a user is deactivated."
+  userDeactivated: User!
+
+  "Fires when a user's roles are changed."
+  userRolesUpdated: User!
+
+  "Fires when a user is added to a company."
+  companyUserAdded(companyId: ID!): CompanyUser!
+}
+
+"Company represents a legal entity (pessoa jurídica)."
+type Company {
+  "Unique company identifier (UUID)"
+  id: ID!
+  "Tenant this company belongs to"
+  tenant_id: ID!
+  "CNPJ (14 digits)"
+  cnpj: String!
+  "Legal name (Razão Social)"
+  razao_social: String!
+  "Trade name (Nome Fantasia)"
+  nome_fantasia: String!
+  "Company status: active, pending, suspended"
+  status: String!
+  "Company address"
+  address: Address!
+  "ISO 8601 creation timestamp"
+  created_at: String!
+  "ISO 8601 last update timestamp"
+  updated_at: String!
+}
+
+"Address represents a physical location."
+type Address {
+  logradouro: String!
+  numero: String!
+  complemento: String
+  bairro: String!
+  cidade: String!
+  uf: String!
+  cep: String!
+}
+
+"CompanyUser represents a user's membership in a company."
+type CompanyUser {
+  company_id: ID!
+  user_id: ID!
+  role: String!
+  status: String!
+  joined_at: String!
+}
+
+"CompanyConnection represents a paginated list of companies."
+type CompanyConnection {
+  items: [Company!]!
+  count: Int!
+}
+
+"CompanyFilterInput allows filtering companies."
+input CompanyFilterInput {
+  status: String
+  cnpj: String
+  nameSearch: String
+}
+
+extend type Query {
+  "Lists companies with optional filtering and pagination. Admin access required."
+  companies(
+    filter: CompanyFilterInput
+    page: Int
+    limit: Int
+  ): CompanyConnection!
+}
+
+extend type Mutation {
+  "Updates a company's status. Admin access required."
+  updateCompanyStatus(id: ID!, status: String!): Company!
+}
+
+"CompanyInfoCache represents the enriched company data from external APIs."
+type CompanyInfoCache {
+  cnpj: String!
+  razao_social: String!
+  nome_fantasia: String
+  situacao: String!
+  natureza_juridica: String
+  data_abertura: String
+  endereco: Address!
+  telefones: [String!]
+  emails: [String!]
+  cnae_principal: String
+  last_fetched_at: String!
+}
+
+extend type Query {
+  "Queries isolated company info cache data."
+  companyInfoCache(filter: String, limit: Int): [CompanyInfoCache!]!
+
+  "Queries CNPJ verifications history."
+  cnpjVerifications: [String!]!
+}

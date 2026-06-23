@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="41. Run Integration Tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="DIRECTORY" />
+    <directory value="$PROJECT_DIR$/internal/infrastructure" />
+    <filePath value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <pattern value="^\QTest\E" />
+    <goargs value="-run Integration" />
+    <envs>
+      <env name="DATABASE_URL" value="postgres://postgres:postgres@localhost:5432/vyst_identity?sslmode=disable" />
+      <env name="REDIS_ADDR" value="localhost:6379" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

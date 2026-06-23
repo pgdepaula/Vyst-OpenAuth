@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="44. Go Format (fmt)" type="GoToolRunConfiguration" factoryName="Go Tool">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <command value="fmt" />
+    <directory value="$PROJECT_DIR$" />
+    <parameters value="./..." />
+    <method v="2" />
+  </configuration>
+</component>

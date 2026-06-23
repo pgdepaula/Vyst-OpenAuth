@@ -1,0 +1,277 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate-tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      is-prerelease: ${{ steps.tag.outputs['is-prerelease'] }}
+    steps:
+      - name: Validate semantic version
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "Tag '${tag}' is not a supported semantic version. Use vX.Y.Z or vX.Y.Z-prerelease."
+            exit 1
+          fi
+
+          version="${tag#v}"
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "is-prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${version}"
+          echo "Prerelease: ${prerelease}"
+
+  quality-gate:
+    name: Release quality gate
+    needs: validate-tag
+    uses: ./.github/workflows/_go-validation.yml
+    with:
+      run-integration: true
+      run-race: true
+      upload-coverage: false
+
+  build-binaries:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - validate-tag
+      - quality-gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Build release bundle
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          set -euo pipefail
+          bundle="vyst-openauth-${VERSION}-${SUFFIX}"
+          root="dist/${bundle}"
+          mkdir -p "${root}/bin" "${root}/migrations"
+
+          commands=(
+            identity-api
+            identity-worker
+            sentinel-worker
+            billing-worker
+            job-sync-companies
+            migrate
+          )
+
+          for command in "${commands[@]}"; do
+            echo "Building ${command} for ${GOOS}/${GOARCH}..."
+            CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${root}/bin/${command}" "./cmd/${command}"
+          done
+
+          echo "Building verify for ${GOOS}/${GOARCH}..."
+          CGO_ENABLED=0 go build \
+            -trimpath \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${GITHUB_SHA}" \
+            -o "${root}/bin/vyst-verify" \
+            ./cmd/verify
+
+          cp README.md LICENSE "${root}/"
+          cp migrations/*.sql "${root}/migrations/"
+          tar -C dist -czf "dist/${bundle}.tar.gz" "${bundle}"
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.suffix }}
+          path: dist/vyst-openauth-${{ needs.validate-tag.outputs.version }}-${{ matrix.suffix }}.tar.gz
+          retention-days: 7
+
+  docker-image:
+    name: Publish container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs:
+      - validate-tag
+      - quality-gate
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ needs.validate-tag.outputs['is-prerelease'] == 'false' }}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ needs.validate-tag.outputs['is-prerelease'] == 'false' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs:
+      - validate-tag
+      - build-binaries
+      - docker-image
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Write release notes
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          previous_tag=""
+          while IFS= read -r candidate; do
+            if [[ "$candidate" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] && [ "$candidate" != "$TAG" ]; then
+              previous_tag="$candidate"
+              break
+            fi
+          done < <(git tag --sort=-version:refname)
+
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          changelog="$(git log "$range" --no-merges --pretty=format:'- %s (%h)')"
+          if [ -z "$changelog" ]; then
+            changelog="- No commit summary was generated for this release."
+          fi
+
+          {
+            echo "## Vyst Open Auth ${TAG}"
+            echo
+            echo "### Changes"
+            echo "${changelog}"
+            echo
+            echo "### Container image"
+            echo
+            echo '```bash'
+            echo "docker pull ${IMAGE}:${VERSION}"
+            echo '```'
+            echo
+            echo "### Checksums"
+            echo
+            echo "See SHA256SUMS attached to this release."
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.validate-tag.outputs['is-prerelease'] }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists. Refusing to overwrite it."
+            exit 1
+          fi
+
+          args=(
+            release create "$TAG"
+            dist/*.tar.gz
+            dist/SHA256SUMS
+            --verify-tag
+            --title "Vyst Open Auth ${TAG}"
+            --notes-file release-notes.md
+          )
+
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+
+          gh "${args[@]}"

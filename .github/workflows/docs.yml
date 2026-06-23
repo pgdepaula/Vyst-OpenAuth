@@ -1,0 +1,80 @@
+name: Documentation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "Wiki/**"
+      - "README.md"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "Wiki/**"
+      - "README.md"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Generate Go documentation
+        run: make docs-gen
+
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request' && github.ref_name == 'main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref_name == 'main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/html
+
+  deploy-docs:
+    name: Deploy documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-docs
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

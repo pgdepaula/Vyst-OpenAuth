@@ -1,0 +1,16 @@
+{
+    "name": "vyst-identity-k6-tests",
+    "version": "1.0.0",
+    "description": "K6 E2E tests for Vyst Identity APIs",
+    "scripts": {
+        "test:rest": "k6 run rest/rest_api_test.ts",
+        "test:graphql": "k6 run graphql/graphql_api_test.ts",
+        "test:grpc": "./k6 run grpc/grpc_api_test.ts",
+        "test:all": "k6 run all_apis_test.ts",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/k6": "^0.49.0",
+        "typescript": "^5.3.0"
+    }
+}

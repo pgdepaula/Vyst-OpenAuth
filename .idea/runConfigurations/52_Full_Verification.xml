@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="52. Full Verification" type="MakefileRunConfiguration" factoryName="Makefile">
+    <makefileFile value="$PROJECT_DIR$/Makefile" />
+    <target value="verify-all" />
+    <workingDirectory value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

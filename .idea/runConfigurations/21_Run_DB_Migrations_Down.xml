@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="21. Run DB Migrations Down" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="PACKAGE" />
+    <package value="github.com/vyst/identity/cmd/migrate" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/migrate/main.go" />
+    <parameters value="down" />
+    <envs>
+      <env name="DATABASE_URL" value="postgres://postgres:postgres@localhost:5432/vyst_identity?sslmode=disable" />
+    </envs>
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="61. Docker Compose Up" run_configuration_type="MakefileRunConfiguration" />
+    </method>
+  </configuration>
+</component>

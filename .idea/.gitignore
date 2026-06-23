@@ -1,0 +1,21 @@
+# Ignorar arquivos pessoais e temporários do GoLand/IntelliJ
+/workspace.xml
+/tasks.xml
+/usage.statistics.xml
+/dictionary.state.xml
+/shelf/
+/contentModel.xml
+/indexLayout.xml
+/projectSettingsUpdater.xml
+
+# Configurações de módulo específicas da máquina
+/*.iml
+/modules.xml
+
+# Clientes HTTP locais e pastas de queries de teste
+/httpRequests/
+/queries/
+
+# Cache local de conexões a banco de dados (DataSources)
+/dataSources/
+/dataSources.local.xml

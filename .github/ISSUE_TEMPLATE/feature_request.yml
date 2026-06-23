@@ -1,0 +1,74 @@
+name: Feature Proposal 💡
+description: Propose a new feature, rule addition, or architectural improvement.
+title: "[Proposal]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make Vyst Open Auth better? We'd love to hear it! Please outline your proposal below.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: A clear and concise description of the proposed feature.
+      placeholder: e.g. Add machine learning risk rules to Sentinel Worker
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem or limitation? Please describe.
+      placeholder: e.g. Currently we evaluate travel risk statically, which causes false positives for users traveling near border zones.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Design / Solution
+      description: Describe the solution or change you would like to see. Be as detailed as possible about coding adjustments.
+      placeholder: e.g. We should define a new risk rule under `internal/domain/risk/ml_rule.go` that queries a light statistical cache...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or workarounds you have considered.
+      placeholder: e.g. Increasing static thresholds, which reduces security effectiveness.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Targeting Domain
+      description: Which domain area does this enhancement impact?
+      options:
+        - "Domain Logic (internal/domain)"
+        - "Use Cases & Ports (internal/application)"
+        - "Persistence & Adapters (internal/infrastructure)"
+        - "External APIs / Interfaces (interfaces/)"
+        - "Admin console (vyst-ui)"
+        - "DevOps / CI/CD Pipelines"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any other context, code diagrams, or references about the feature request here.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Agreements
+      options:
+        - label: I have searched existing discussions and issues to confirm this feature hasn't been proposed yet.
+          required: true
+        - label: I agree to collaborate with maintainers on the implementation details if this proposal is accepted.
+          required: true

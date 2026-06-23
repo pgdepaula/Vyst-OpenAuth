@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="02. Run API (Superuser)" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="PACKAGE" />
+    <package value="github.com/vyst/identity/cmd/identity-api" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/identity-api/main.go" />
+    <envs>
+      <env name="GO_ENV" value="development" />
+      <env name="DATABASE_URL" value="postgres://postgres:postgres@localhost:5432/vyst_identity?sslmode=disable" />
+    </envs>
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="20. Run DB Migrations Up" run_configuration_type="GoApplicationRunConfiguration" />
+    </method>
+  </configuration>
+</component>

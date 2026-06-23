@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="11. Run Billing Worker" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="PACKAGE" />
+    <package value="github.com/vyst/identity/cmd/billing-worker" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/billing-worker/main.go" />
+    <envs>
+      <env name="GO_ENV" value="development" />
+    </envs>
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="61. Docker Compose Up" run_configuration_type="MakefileRunConfiguration" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="46. Go Mod Tidy" type="GoToolRunConfiguration" factoryName="Go Tool">
+    <module name="identity" />
+    <working_directory value="$PROJECT_DIR$" />
+    <command value="mod" />
+    <directory value="$PROJECT_DIR$" />
+    <parameters value="tidy" />
+    <method v="2" />
+  </configuration>
+</component>

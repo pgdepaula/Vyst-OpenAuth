@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="51. Generate HTML Docs" type="MakefileRunConfiguration" factoryName="Makefile">
+    <makefileFile value="$PROJECT_DIR$/Makefile" />
+    <target value="docs-gen" />
+    <workingDirectory value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

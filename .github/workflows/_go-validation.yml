@@ -1,0 +1,238 @@
+name: Reusable Go Validation
+
+on:
+  workflow_call:
+    inputs:
+      run-integration:
+        description: Run Docker-backed PostgreSQL integration tests.
+        required: false
+        type: boolean
+        default: false
+      run-race:
+        description: Run race detector tests for security-sensitive packages.
+        required: false
+        type: boolean
+        default: false
+      upload-coverage:
+        description: Upload unit test coverage as a short-lived artifact.
+        required: false
+        type: boolean
+        default: false
+      check-format:
+        description: Check gofmt only for Go files changed by the triggering event.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  formatting-and-modules:
+    name: Check Go modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Check changed Go files with gofmt
+        if: ${{ inputs['check-format'] }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ github.event_name }}" in
+            pull_request)
+              base="${{ github.event.pull_request.base.sha }}"
+              head="${{ github.event.pull_request.head.sha }}"
+              ;;
+            merge_group)
+              base="${{ github.event.merge_group.base_sha }}"
+              head="${{ github.event.merge_group.head_sha }}"
+              ;;
+            push)
+              base="${{ github.event.before }}"
+              head="${{ github.sha }}"
+              ;;
+            *)
+              base=""
+              head="${{ github.sha }}"
+              ;;
+          esac
+
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            echo "No stable base ref was available; skipping changed-file formatting check."
+            exit 0
+          fi
+
+          changed_go_files="$(git diff --name-only "$base" "$head" -- '*.go' | tr '\n' ' ')"
+          if [ -z "$changed_go_files" ]; then
+            echo "No changed Go files require gofmt validation."
+            exit 0
+          fi
+
+          files="$(gofmt -l $changed_go_files)"
+          if [ -n "$files" ]; then
+            echo "The following changed Go files are not gofmt-formatted:"
+            echo "$files"
+            echo "Run gofmt on the files listed above."
+            exit 1
+          fi
+          echo "Changed Go files are gofmt-formatted."
+
+      - name: Verify root module
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Verifying root module dependencies..."
+          go mod tidy -diff
+          go mod verify
+
+      - name: Verify demo module
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Verifying examples/demo-app dependencies..."
+          (
+            cd examples/demo-app
+            go mod tidy -diff
+            go mod verify
+          )
+
+  lint:
+    name: Run golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run golangci-lint (root)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.5
+          working-directory: .
+          args: --timeout=5m
+
+      - name: Run golangci-lint (demo-app)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.5
+          working-directory: examples/demo-app
+          args: --timeout=5m
+
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run short test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running short Go tests with coverage..."
+          go test -short -covermode=atomic -coverprofile=coverage.out ./internal/... ./pkg/... ./cmd/... ./test/e2e/...
+
+      - name: Write coverage summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          total="$(go tool cover -func=coverage.out | awk '/^total:/ { print $3 }')"
+          {
+            echo "## Go coverage"
+            echo
+            echo "Short test suite coverage: ${total}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: ${{ inputs['upload-coverage'] }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          retention-days: 7
+
+  build:
+    name: Build Go commands
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Build service commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bin
+          commands=(
+            identity-api
+            identity-worker
+            sentinel-worker
+            billing-worker
+            job-sync-companies
+            migrate
+          )
+          for command in "${commands[@]}"; do
+            echo "Building ${command}..."
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "bin/${command}" "./cmd/${command}"
+          done
+          echo "Building verify..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "bin/verify" ./cmd/verify
+
+  race-tests:
+    name: Run race detector tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: ${{ inputs['run-race'] }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run race detector
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running race detector for internal packages and SDK..."
+          go test -race -short ./internal/... ./pkg/...
+
+  integration-tests:
+    name: Run integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: ${{ inputs['run-integration'] }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+
+      - name: Run PostgreSQL integration tests
+        shell: bash
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          echo "Running integration tests backed by Testcontainers PostgreSQL..."
+          go test -v -count=1 -timeout=20m ./test/integration/...

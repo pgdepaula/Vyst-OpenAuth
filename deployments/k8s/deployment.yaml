@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vyst-identity
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vyst-identity
+  template:
+    metadata:
+      labels:
+        app: vyst-identity
+    spec:
+      containers:
+      - name: vyst-identity
+        image: vyst/identity:latest
+        ports:
+        - containerPort: 8080
