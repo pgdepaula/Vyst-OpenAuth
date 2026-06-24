@@ -4,6 +4,8 @@ package http
 import (
 	gohttp "net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -243,16 +245,24 @@ func NewRouter(
 	// UI Routes (Angular SPA) - Must be last!
 	// Serve static files and handle SPA routing
 	spaPath := "./web/vyst-ui/dist/vyst-ui/browser"
+	spaBaseAbs, err := filepath.Abs(spaPath)
+	if err != nil {
+		panic(err)
+	}
 	r.Get("/*", func(w gohttp.ResponseWriter, r *gohttp.Request) {
 		// Check if file exists in static directory
-		path := spaPath + r.URL.Path
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			gohttp.ServeFile(w, r, path)
-			return
+		reqPath := filepath.Clean("/" + r.URL.Path)
+		relPath := strings.TrimPrefix(reqPath, "/")
+		candidatePath, err := filepath.Abs(filepath.Join(spaBaseAbs, relPath))
+		if err == nil && (candidatePath == spaBaseAbs || strings.HasPrefix(candidatePath, spaBaseAbs+string(os.PathSeparator))) {
+			if info, statErr := os.Stat(candidatePath); statErr == nil && !info.IsDir() {
+				gohttp.ServeFile(w, r, candidatePath)
+				return
+			}
 		}
 
 		// Otherwise serve index.html for SPA routing
-		gohttp.ServeFile(w, r, spaPath+"/index.html")
+		gohttp.ServeFile(w, r, filepath.Join(spaBaseAbs, "index.html"))
 	})
 
 	return r
