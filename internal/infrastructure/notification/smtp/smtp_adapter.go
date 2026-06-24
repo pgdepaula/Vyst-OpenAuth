@@ -26,30 +26,37 @@ func NewSMTPAdapter(host, port, user, password, from string) *SMTPAdapter {
 }
 
 func (s *SMTPAdapter) SendEmail(to, subject, body string) error {
-	if _, err := mail.ParseAddress(to); err != nil {
+	parsedTo, err := mail.ParseAddress(to)
+	if err != nil {
 		return fmt.Errorf("invalid recipient email address: %w", err)
+	}
+	parsedFrom, err := mail.ParseAddress(s.From)
+	if err != nil {
+		return fmt.Errorf("invalid sender email address: %w", err)
 	}
 	if strings.ContainsAny(subject, "\r\n") {
 		return fmt.Errorf("invalid email subject")
 	}
-	if strings.ContainsAny(s.From, "\r\n") {
-		return fmt.Errorf("invalid sender email address")
-	}
+
+	safeSubject := strings.ReplaceAll(strings.ReplaceAll(subject, "\r", ""), "\n", "")
+	safeBody := strings.ReplaceAll(body, "\r", "")
+	safeTo := parsedTo.Address
+	safeFrom := parsedFrom.Address
 
 	auth := smtp.PlainAuth("", s.User, s.Password, s.Host)
 	addr := fmt.Sprintf("%s:%s", s.Host, s.Port)
 
 	headers := make(map[string]string)
-	headers["From"] = s.From
-	headers["To"] = to
-	headers["Subject"] = subject
+	headers["From"] = safeFrom
+	headers["To"] = safeTo
+	headers["Subject"] = safeSubject
 	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
 
 	message := ""
 	for k, v := range headers {
 		message += fmt.Sprintf("%s: %s\r\n", k, v)
 	}
-	message += "\r\n" + body
+	message += "\r\n" + safeBody
 
-	return smtp.SendMail(addr, auth, s.From, []string{to}, []byte(message))
+	return smtp.SendMail(addr, auth, safeFrom, []string{safeTo}, []byte(message))
 }
