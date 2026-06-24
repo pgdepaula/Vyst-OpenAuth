@@ -2,7 +2,9 @@ package smtp
 
 import (
 	"fmt"
+	"net/mail"
 	"net/smtp"
+	"strings"
 )
 
 type SMTPAdapter struct {
@@ -24,6 +26,16 @@ func NewSMTPAdapter(host, port, user, password, from string) *SMTPAdapter {
 }
 
 func (s *SMTPAdapter) SendEmail(to, subject, body string) error {
+	if _, err := mail.ParseAddress(to); err != nil {
+		return fmt.Errorf("invalid recipient email address: %w", err)
+	}
+	if strings.ContainsAny(subject, "\r\n") {
+		return fmt.Errorf("invalid email subject")
+	}
+	if strings.ContainsAny(s.From, "\r\n") {
+		return fmt.Errorf("invalid sender email address")
+	}
+
 	auth := smtp.PlainAuth("", s.User, s.Password, s.Host)
 	addr := fmt.Sprintf("%s:%s", s.Host, s.Port)
 
