@@ -46,7 +46,7 @@ Vyst Open Auth is intended for:
 - **Platform engineers** deploying multi-tenant SaaS products on PostgreSQL.
 - **Organizations in Brazil** requiring CPF/CNPJ validation integrated into the authentication flow.
 
-It is not intended as a drop-in replacement for general-purpose OIDC providers. Full OpenID Connect support is on the [roadmap](Wiki/Roadmap.md) but is not yet implemented.
+It is not intended as a drop-in replacement for general-purpose OIDC providers. Full OpenID Connect support is on the [roadmap](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Roadmap.md) but is not yet implemented.
 
 ---
 
@@ -93,7 +93,7 @@ go run ./cmd/identity-api
 
 The API will be available at `http://localhost:8080`.
 
-> **Security note:** The `.env.example` file contains development placeholder values. Never use these values in production. See the [Deployment guide](Wiki/Deployment-and-Professional-Use.md) for production configuration requirements.
+> **Security note:** The `.env.example` file contains development placeholder values. Never use these values in production. See the [Deployment guide](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Deployment-and-Professional-Use.md) for production configuration requirements.
 
 ---
 
@@ -166,14 +166,14 @@ make proto          # Regenerate gRPC protobuf code
 
 | Resource | Description |
 |---|---|
-| [Wiki Home](Wiki/Home.md) | Starting point for all conceptual and operational documentation |
-| [Architecture](Wiki/Architecture.md) | Clean Architecture layers and dependency rules |
-| [Security](Wiki/Security.md) | Authentication mechanisms, RLS, and database role separation |
-| [Deployment](Wiki/Deployment-and-Professional-Use.md) | Environment setup, Docker, and production deployment |
-| [Use Cases](Wiki/Use-Cases.md) | Authentication and authorization flows with sequence diagrams |
-| [Applied Engineering](Wiki/Applied-Engineering.md) | Outbox pattern, Sentinel Worker, Billing Worker, and observability |
-| [Engineering Principles](Wiki/Software-Engineering-Principles.md) | Clean Architecture conventions, error handling, and Go patterns |
-| [Roadmap](Wiki/Roadmap.md) | Implemented features and planned milestones |
+| [Wiki Home](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Home.md) | Starting point for all conceptual and operational documentation |
+| [Architecture](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Architecture.md) | Clean Architecture layers and dependency rules |
+| [Security](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Security.md) | Authentication mechanisms, RLS, and database role separation |
+| [Deployment](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Deployment-and-Professional-Use.md) | Environment setup, Docker, and production deployment |
+| [Use Cases](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Use-Cases.md) | Authentication and authorization flows with sequence diagrams |
+| [Applied Engineering](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Applied-Engineering.md) | Outbox pattern, Sentinel Worker, Billing Worker, and observability |
+| [Engineering Principles](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Software-Engineering-Principles.md) | Clean Architecture conventions, error handling, and Go patterns |
+| [Roadmap](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Roadmap.md) | Implemented features and planned milestones |
 | API reference (local) | Run `make docs-gen`, then open `docs/html/index.html` |
 
 ---
@@ -182,7 +182,7 @@ make proto          # Regenerate gRPC protobuf code
 
 Vyst Open Auth uses RSA-signed JWTs (RS256), Argon2id password hashing, and PostgreSQL Row-Level Security for tenant isolation. The runtime application connects to PostgreSQL using a restricted role (`vyst_app`) that cannot bypass RLS policies.
 
-For details on the security model, see [Wiki/Security.md](Wiki/Security.md).
+For details on the security model, see [https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Security.md](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Security.md).
 
 To report a vulnerability, see [.github/SECURITY.md](.github/SECURITY.md). **Do not open public issues for security reports.**
 
