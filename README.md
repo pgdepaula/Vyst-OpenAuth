@@ -167,7 +167,7 @@ make proto          # Regenerate gRPC protobuf code
 | Resource | Description |
 |---|---|
 | [Go API Reference](https://pgdepaula.github.io/Vyst-OpenAuth/) | Auto-generated API reference for public packages, types, functions, and interfaces. |
-| [Wiki Home](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Home.md) | Starting point for all conceptual and operational documentation |
+| [Wiki Home](https://github.com/pgdepaula/Vyst-OpenAuth/wiki) | Starting point for all conceptual and operational documentation |
 | [Architecture](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Architecture.md) | Clean Architecture layers and dependency rules |
 | [Security](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Security.md) | Authentication mechanisms, RLS, and database role separation |
 | [Deployment](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Deployment-and-Professional-Use.md) | Environment setup, Docker, and production deployment |
