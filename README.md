@@ -166,6 +166,7 @@ make proto          # Regenerate gRPC protobuf code
 
 | Resource | Description |
 |---|---|
+| API reference | [GO API documentation](https://pgdepaula.github.io/Vyst-OpenAuth/) |
 | [Wiki Home](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Home.md) | Starting point for all conceptual and operational documentation |
 | [Architecture](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Architecture.md) | Clean Architecture layers and dependency rules |
 | [Security](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Security.md) | Authentication mechanisms, RLS, and database role separation |
@@ -174,7 +175,7 @@ make proto          # Regenerate gRPC protobuf code
 | [Applied Engineering](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Applied-Engineering.md) | Outbox pattern, Sentinel Worker, Billing Worker, and observability |
 | [Engineering Principles](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Software-Engineering-Principles.md) | Clean Architecture conventions, error handling, and Go patterns |
 | [Roadmap](https://github.com/pgdepaula/Vyst-OpenAuth/wiki/Roadmap.md) | Implemented features and planned milestones |
-| API reference (local) | Run `make docs-gen`, then open `docs/html/index.html` |
+
 
 ---
 
